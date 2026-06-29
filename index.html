@@ -1,289 +1,733 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="utf-8">
-        <meta name="description"
-        content="GANTASTIC transfers edits from pre-trained GANs to pre-trained diffusion models.">
-        <meta name="keywords" content="Diffusion Models, Latent Space Exploration">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <script src="https://www.w3counter.com/tracker.js?id=151971"></script>
-        <title>GANTASTIC</title>
-        <script>
-        window.dataLayer = window.dataLayer || [];
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ViDiT — Learn Once, Edit Anywhere</title>
+<meta name="description" content="ViDiT learns a single continuous editing direction from a small set of image-edit pairs and transfers fine-grained semantic edits to any image in a zero-shot manner — no fine-tuning, no per-image optimization. Yusuf Dalva, Hidir Yesiltepe, Pinar Yanardag, Virginia Tech. ECCV 2026.">
+<meta name="keywords" content="Diffusion Models, Image Editing, Visual Direction Transfer, Disentangled Editing, ECCV 2026">
+<meta property="og:title" content="ViDiT: Learn Once, Edit Anywhere — Visual Direction Transfer for Diffusion Models">
+<meta property="og:description" content="Transfer fine-grained visual edits into a single continuous direction and apply it zero-shot to any image.">
+<meta property="og:type" content="article">
 
-        function gtag() {
-        dataLayer.push(arguments);
+<script src="https://www.w3counter.com/tracker.js?id=151971"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag() { dataLayer.push(arguments); }
+  gtag('js', new Date());
+  gtag('config', 'G-PYVRSFMDRL');
+</script>
+
+<!-- MathJax for the annotated algorithm -->
+<script>
+  window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Serif+Display&family=JetBrains+Mono:wght@500&display=swap');
+
+  /* ---------- Tokens ---------- */
+  :root {
+    --blue-50:  #EAF2FF;
+    --blue-100: #D2E2FF;
+    --blue-300: #BFD7FF;
+    --blue-500: #2563EB;   /* ViDiT primary */
+    --blue-700: #1D4ED8;
+    --blue-900: #0F2147;
+
+    --cyan-50:  #E6FBFF;
+    --cyan-300: #A5E8F5;
+    --cyan-500: #06B6D4;     /* accent */
+    --cyan-700: #0E7490;
+
+    --ink-900: #0E1726;
+    --ink-700: #2B3950;
+    --ink-500: #5A6A82;
+    --ink-300: #9AA8BE;
+    --ink-100: #E2E8F0;
+    --ink-50:  #F1F5F9;
+    --paper:   #F7FAFE;
+    --white:   #FFFFFF;
+
+    --grad-hero: radial-gradient(120% 80% at 12% 0%, rgba(37,99,235,0.92) 0%, rgba(14,23,38,0.96) 55%, rgba(6,182,212,0.62) 100%);
+    --grad-pop:  linear-gradient(135deg, #2563EB 0%, #3B82F6 50%, #06B6D4 110%);
+
+    --shadow-card: 0 1px 2px rgba(14,23,38,0.05), 0 8px 24px rgba(14,23,38,0.07);
+    --shadow-pop:  0 8px 32px rgba(37,99,235,0.22), 0 1px 2px rgba(14,23,38,0.06);
+
+    --r-sm: 8px;
+    --r-md: 14px;
+    --r-lg: 22px;
+    --r-xl: 32px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--ink-900);
+    background: var(--paper);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: var(--blue-700); text-decoration: none; }
+  a:hover { color: var(--blue-500); }
+  img { max-width: 100%; height: auto; display: block; }
+
+  /* ---------- Sticky nav ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px);
+    background: rgba(247,250,254,0.78);
+    border-bottom: 1px solid rgba(14,23,38,0.06);
+  }
+  .nav-inner {
+    max-width: 1200px; margin: 0 auto; padding: 14px 28px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .nav-brand {
+    font-weight: 800; font-size: 15px; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .nav-brand .dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--grad-pop); box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
+  }
+  .nav-links { display: flex; gap: 24px; font-size: 13.5px; font-weight: 500; }
+  .nav-links a { color: var(--ink-700); }
+  .nav-links a:hover { color: var(--blue-500); }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative; min-height: 88vh; padding: 76px 24px 120px;
+    color: #fff; background: var(--grad-hero), #0E1726; overflow: hidden;
+  }
+  .hero::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(60% 50% at 82% 12%, rgba(59,130,246,0.45), transparent 60%),
+      radial-gradient(50% 40% at 10% 82%, rgba(6,182,212,0.42), transparent 60%);
+    animation: drift 22s ease-in-out infinite alternate;
+  }
+  @keyframes drift {
+    from { transform: translate3d(0,0,0) scale(1); }
+    to   { transform: translate3d(-30px,20px,0) scale(1.05); }
+  }
+  .hero::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'><circle cx='2' cy='2' r='0.5' fill='%23ffffff' fill-opacity='0.06'/></svg>");
+  }
+  .hero-inner { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; text-align: center; }
+
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 999px;
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.18);
+    font-size: 12.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: 26px; backdrop-filter: blur(8px);
+  }
+  .hero-eyebrow .pulse {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--cyan-300);
+    box-shadow: 0 0 0 0 rgba(165,232,245,0.7); animation: pulse 2.2s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(165,232,245,0.7); }
+    70% { box-shadow: 0 0 0 12px rgba(165,232,245,0); }
+    100% { box-shadow: 0 0 0 0 rgba(165,232,245,0); }
+  }
+
+  .hero h1 {
+    font-family: 'DM Serif Display', serif; font-weight: 400;
+    font-size: clamp(2.3rem, 5.2vw, 4.2rem); line-height: 1.06;
+    letter-spacing: -0.02em; margin-bottom: 18px;
+  }
+  .hero h1 .grad {
+    background: linear-gradient(135deg, #BFD7FF 0%, #FFFFFF 50%, #A5E8F5 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .tagline {
+    font-size: clamp(1.02rem, 1.5vw, 1.25rem); color: rgba(255,255,255,0.82);
+    max-width: 760px; margin: 0 auto 32px; font-weight: 400;
+  }
+
+  /* Authors card inside the hero */
+  .hero-authors-card {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+    gap: 18px 26px; margin: 0 auto 32px; max-width: 920px; padding: 18px 24px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14);
+    border-radius: var(--r-lg); backdrop-filter: blur(14px); text-align: left;
+  }
+  .author-chip { display: flex; align-items: center; gap: 12px; }
+  .author-avatar {
+    width: 44px; height: 44px; border-radius: 50%; background: var(--grad-pop); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Serif Display', serif; font-size: 16px; box-shadow: var(--shadow-pop); flex-shrink: 0;
+  }
+  .author-name { font-weight: 700; font-size: 15px; color: #fff; line-height: 1.2; }
+  .author-name a { color: #fff; border-bottom: 1px dotted rgba(255,255,255,0.35); padding-bottom: 1px; }
+  .author-name a:hover { color: var(--cyan-300); border-bottom-color: var(--cyan-300); }
+  .author-links { display: flex; gap: 6px; margin-top: 4px; }
+  .author-links a {
+    width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 7px; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75);
+    border: 1px solid rgba(255,255,255,0.10); transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .author-links a:hover { background: rgba(191,215,255,0.2); color: var(--cyan-300); border-color: rgba(165,232,245,0.5); }
+  .author-links svg { width: 14px; height: 14px; }
+  .hero-affil {
+    display: flex; align-items: center; gap: 10px;
+    padding-left: 22px; border-left: 1px solid rgba(255,255,255,0.12);
+  }
+  .vt-mark-hero {
+    width: 30px; height: 30px; border-radius: 7px; background: #861F41; color: #F58025;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Serif Display', serif; font-weight: 700; font-size: 14px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  }
+  .vt-name { font-weight: 600; color: #fff; font-size: 13.5px; line-height: 1.2; }
+  .vt-dept { font-size: 11.5px; color: rgba(255,255,255,0.65); }
+  @media (max-width: 760px) {
+    .hero-affil { border-left: none; padding-left: 0; border-top: 1px solid rgba(255,255,255,0.10); padding-top: 14px; width: 100%; justify-content: center; }
+  }
+
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 52px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px;
+    font-size: 14px; font-weight: 600; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.10); color: #fff;
+    transition: transform 0.15s, background 0.2s, border-color 0.2s; backdrop-filter: blur(8px);
+  }
+  .btn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.3); color: #fff; }
+  .btn.primary { background: linear-gradient(135deg, #2563EB 0%, #3B82F6 100%); border-color: transparent; box-shadow: var(--shadow-pop); }
+  .btn.primary:hover { background: linear-gradient(135deg, #1D4ED8 0%, #2563EB 100%); }
+  .btn svg { width: 16px; height: 16px; }
+  .btn[aria-disabled="true"] { opacity: 0.6; cursor: not-allowed; }
+
+  /* Hero teaser image */
+  .hero-teaser {
+    max-width: 1000px; margin: 0 auto; border-radius: var(--r-lg); overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 30px 80px rgba(0,0,0,0.4); background: #fff;
+  }
+  .hero-teaser img { width: 100%; display: block; }
+  .hero-teaser-caption {
+    background: rgba(14,23,38,0.7); color: rgba(255,255,255,0.78); padding: 14px 20px;
+    font-size: 13px; text-align: center; font-style: italic;
+  }
+
+  /* ---------- Section base ---------- */
+  .section { max-width: 1200px; margin: 0 auto; padding: 96px 24px 40px; position: relative; }
+  .section.narrow { max-width: 880px; }
+  .section-eyebrow {
+    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.18em;
+    text-transform: uppercase; padding: 5px 12px; border-radius: 999px; margin-bottom: 16px;
+  }
+  .section-eyebrow.blue { background: var(--blue-50); color: var(--blue-700); }
+  .section-eyebrow.cyan   { background: var(--cyan-50);   color: var(--cyan-700); }
+  .section-eyebrow.ink    { background: var(--ink-100);   color: var(--ink-700); }
+  .section-title {
+    font-family: 'DM Serif Display', serif; font-size: clamp(1.9rem, 3.2vw, 2.6rem);
+    line-height: 1.1; letter-spacing: -0.015em; margin-bottom: 14px;
+  }
+  .section-subtitle { font-size: 16px; color: var(--ink-500); max-width: 780px; margin-bottom: 40px; }
+
+  /* ---------- TL;DR ---------- */
+  .tldr { margin-top: -80px; position: relative; z-index: 2; max-width: 1080px; margin-left: auto; margin-right: auto; padding: 0 24px; }
+  .tldr-card {
+    background: #fff; border-radius: var(--r-xl); padding: 36px 40px;
+    display: grid; grid-template-columns: auto 1fr; gap: 28px; align-items: center;
+    box-shadow: var(--shadow-card), 0 24px 60px rgba(14,23,38,0.12); border: 1px solid var(--ink-100);
+  }
+  .tldr-badge {
+    width: 84px; height: 84px; border-radius: 24px; background: var(--grad-pop);
+    display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-pop);
+    color: #fff; font-family: 'DM Serif Display', serif; font-size: 30px; font-style: italic;
+  }
+  .tldr-body { font-size: 17px; color: var(--ink-700); line-height: 1.55; }
+  .tldr-body b { color: var(--ink-900); }
+  .tldr-body .hl-blue { background: linear-gradient(180deg, transparent 65%, rgba(37,99,235,0.22) 65%); padding: 0 2px; color: var(--ink-900); font-weight: 600; }
+  .tldr-body .hl-cyan   { background: linear-gradient(180deg, transparent 65%, rgba(6,182,212,0.22) 65%); padding: 0 2px; color: var(--ink-900); font-weight: 600; }
+
+  /* ---------- Abstract ---------- */
+  .abstract-card {
+    background: #fff; border-radius: var(--r-lg); padding: 32px 36px; border: 1px solid var(--ink-100);
+    box-shadow: var(--shadow-card); font-size: 15px; line-height: 1.78; color: var(--ink-700);
+  }
+  .abstract-card b { color: var(--ink-900); font-weight: 600; }
+
+  /* ---------- Figure card ---------- */
+  .figure-card {
+    background: linear-gradient(180deg, var(--blue-50) 0%, #fff 100%);
+    border: 1px solid var(--blue-100); border-radius: var(--r-lg); padding: 24px; text-align: center;
+  }
+  .figure-card img { border-radius: var(--r-md); margin: 0 auto; }
+  .figure-card .caption {
+    margin-top: 16px; font-size: 13.5px; color: var(--ink-500); font-style: italic;
+    max-width: 860px; margin-left: auto; margin-right: auto; line-height: 1.6;
+  }
+  .figure-card .caption b { color: var(--ink-700); font-style: normal; }
+  .scale-track {
+    display: flex; align-items: center; gap: 14px; max-width: 720px; margin: 16px auto 0;
+    font-size: 12px; font-weight: 600; color: var(--ink-500); letter-spacing: 0.02em;
+  }
+  .scale-track .scale-bar {
+    flex: 1; height: 8px; border-radius: 999px;
+    background: linear-gradient(90deg, var(--cyan-500) 0%, var(--ink-100) 50%, var(--blue-500) 100%);
+    box-shadow: inset 0 0 0 1px rgba(14,23,38,0.06);
+  }
+
+  /* ---------- Method steps ---------- */
+  .method-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 36px; }
+  .method-step {
+    background: #fff; border: 1px solid var(--ink-100); border-radius: var(--r-md); padding: 24px;
+    position: relative; transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .method-step:hover { transform: translateY(-3px); box-shadow: var(--shadow-card); }
+  .method-step .num {
+    display: inline-block; font-family: 'DM Serif Display', serif; font-size: 20px;
+    width: 38px; height: 38px; line-height: 38px; text-align: center; border-radius: 12px;
+    background: var(--grad-pop); color: #fff; margin-bottom: 14px;
+  }
+  .method-step h3 { font-size: 15.5px; font-weight: 700; color: var(--ink-900); margin-bottom: 8px; }
+  .method-step p { font-size: 13.5px; color: var(--ink-500); line-height: 1.6; }
+
+  /* ---------- Annotated algorithm ---------- */
+  .algo-card {
+    background: #fff; border: 1px solid var(--ink-100); border-radius: var(--r-lg);
+    padding: 28px 32px; box-shadow: var(--shadow-card);
+  }
+  .algo-title { font-family: 'DM Serif Display', serif; font-size: 1.25rem; margin-bottom: 6px; color: var(--ink-900); }
+  .algo-require {
+    font-size: 0.92rem; color: var(--ink-500); border-left: 3px solid var(--blue-300);
+    padding-left: 0.85rem; margin: 0.5rem 0 1.25rem 0; line-height: 1.55;
+  }
+  .algo-require b { color: var(--ink-700); }
+  .algo-step {
+    display: grid; grid-template-columns: 2rem 1fr; gap: 0.4rem 0.85rem; align-items: baseline;
+    padding: 0.6rem 0; border-top: 1px dashed var(--ink-100);
+  }
+  .algo-step .num { color: var(--ink-300); font-variant-numeric: tabular-nums; font-size: 0.85rem; text-align: right; }
+  .algo-step .code { font-size: 1.02rem; color: var(--ink-900); overflow-x: auto; }
+  .algo-step .note { grid-column: 2; font-size: 0.86rem; color: var(--blue-700); margin-top: 0.15rem; }
+  .algo-step .note b { color: var(--cyan-700); }
+  .algo-loop { font-weight: 700; color: var(--ink-700); }
+
+  /* ---------- Gallery tabs ---------- */
+  .tabs {
+    display: inline-flex; background: var(--ink-50); padding: 5px; border-radius: 14px;
+    margin-bottom: 28px; border: 1px solid var(--ink-100); gap: 4px; flex-wrap: wrap;
+  }
+  .tabs button {
+    border: none; background: transparent; color: var(--ink-500); font-family: inherit;
+    font-size: 13.5px; font-weight: 600; padding: 8px 16px; border-radius: 10px; cursor: pointer; transition: all 0.18s;
+  }
+  .tabs button:hover { color: var(--ink-900); }
+  .tabs button.active { background: #fff; color: var(--blue-700); box-shadow: var(--shadow-card); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .panel {
+    background: #fff; border: 1px solid var(--ink-100); border-radius: var(--r-lg); padding: 26px;
+    box-shadow: var(--shadow-card);
+  }
+  .panel img { border-radius: var(--r-md); margin: 0 auto; max-height: 55vh; width: auto; max-width: 100%; }
+  .panel-caption {
+    font-size: 13.5px; color: var(--ink-500); margin-top: 18px; line-height: 1.6;
+    padding: 12px 14px; border-left: 3px solid var(--blue-500); background: var(--blue-50);
+    border-radius: 0 8px 8px 0;
+  }
+  .panel-caption b { color: var(--blue-700); }
+
+  /* ---------- Footer ---------- */
+  .footer { margin-top: 80px; background: #0E1726; color: rgba(255,255,255,0.65); padding: 60px 24px 40px; text-align: center; }
+  .footer .brand { font-family: 'DM Serif Display', serif; font-size: 28px; color: #fff; margin-bottom: 8px; }
+  .footer .cite {
+    max-width: 720px; margin: 28px auto 0; text-align: left; background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 18px 22px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.55;
+    color: rgba(255,255,255,0.78); white-space: pre-wrap;
+  }
+  .footer .foot-links { display: flex; gap: 18px; justify-content: center; margin: 26px 0 0; font-size: 13px; }
+  .footer .foot-links a { color: var(--cyan-300); }
+  .footer .small { font-size: 12px; margin-top: 22px; color: rgba(255,255,255,0.45); }
+
+  /* ---------- Reveal-on-scroll ---------- */
+  .reveal { opacity: 1; transition: opacity 0.5s ease, transform 0.5s ease; }
+  .reveal.js-hidden { opacity: 0; transform: translateY(14px); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 980px) {
+    .method-grid { grid-template-columns: 1fr; }
+    .tldr-card { grid-template-columns: 1fr; text-align: center; }
+    .tldr-badge { margin: 0 auto; }
+  }
+  @media (max-width: 580px) {
+    .nav-links { display: none; }
+    .section { padding: 70px 16px 30px; }
+    .tldr-card { padding: 24px; }
+    .panel, .algo-card { padding: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============= NAV ============= -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="nav-brand"><span class="dot"></span> ViDiT</div>
+    <div class="nav-links">
+      <a href="#tldr">TL;DR</a>
+      <a href="#abstract">Abstract</a>
+      <a href="#method">Method</a>
+      <a href="#algorithm">Algorithm</a>
+      <a href="#control">Control</a>
+      <a href="#results">Results</a>
+      <a href="#gallery">Gallery</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ============= HERO ============= -->
+<header class="hero">
+  <div class="hero-inner">
+    <div class="hero-eyebrow"><span class="pulse"></span> ECCV 2026 </div>
+    <h1>
+      <span class="grad">Learn Once, Edit Anywhere</span><br>
+      Visual Direction Transfer for Diffusion Models
+    </h1>
+    <p class="tagline">
+      <b>ViDiT</b> learns a single <b>continuous editing direction</b> from a handful of before-and-after
+      image pairs — then applies it to <i>any</i> image, zero-shot. No fine-tuning. No per-image optimization.
+    </p>
+
+    <!-- Authors -->
+    <div class="hero-authors-card">
+      <div class="author-chip">
+        <div class="author-avatar">YD</div>
+        <div>
+          <div class="author-name"><a href="https://yusufdalva.github.io/" target="_blank" rel="noopener">Yusuf Dalva</a></div>
+          <div class="author-links">
+            <a href="https://yusufdalva.github.io/" target="_blank" rel="noopener" aria-label="Website" title="Website">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+            </a>
+            <a href="mailto:ydalva@vt.edu" aria-label="Email" title="ydalva@vt.edu">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="author-chip">
+        <div class="author-avatar">HY</div>
+        <div>
+          <div class="author-name"><a href="https://yesiltepe-hidir.github.io/" target="_blank" rel="noopener">Hidir Yesiltepe</a></div>
+          <div class="author-links">
+            <a href="https://yesiltepe-hidir.github.io/" target="_blank" rel="noopener" aria-label="Website" title="Website">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+            </a>
+            <a href="mailto:hidir@vt.edu" aria-label="Email" title="hidir@vt.edu">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="author-chip">
+        <div class="author-avatar">PY</div>
+        <div>
+          <div class="author-name"><a href="https://pinguar.org/" target="_blank" rel="noopener">Pinar Yanardag</a></div>
+          <div class="author-links">
+            <a href="https://pinguar.org/" target="_blank" rel="noopener" aria-label="Website" title="Website">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+            </a>
+            <a href="mailto:pinary@vt.edu" aria-label="Email" title="pinary@vt.edu">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="hero-affil">
+        <div class="vt-mark-hero">VT</div>
+        <div>
+          <div class="vt-name">Virginia Tech</div>
+          <div class="vt-dept">Dept. of Computer Science</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-actions">
+      <a class="btn primary" href="#" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> Paper</a>
+      <a class="btn" href="#" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg> Code (soon)</a>
+      <a class="btn" href="#bibtex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg> BibTeX</a>
+    </div>
+
+    <!-- Hero teaser -->
+    <div class="hero-teaser">
+      <img src="./static/images/teaser.png" alt="ViDiT teaser: continuous directions transfer fine-grained edits to any image">
+      <div class="hero-teaser-caption">A single direction learned from image-edit pairs transfers disentangled, bidirectional edits (scale&nbsp;λ<sub>e</sub>) across portraits, artistic styles, and illustrations — without any fine-tuning.</div>
+    </div>
+  </div>
+</header>
+
+<!-- ============= TL;DR ============= -->
+<section class="tldr" id="tldr">
+  <div class="tldr-card reveal">
+    <div class="tldr-badge">TL;DR</div>
+    <div class="tldr-body">
+      Text prompts are a <span class="hl-cyan">descriptive bottleneck</span> — many fine-grained edits are obvious in a
+      pair of images but hard to put into words. <b>ViDiT</b> captures the <span class="hl-blue">visual delta</span>
+      directly from a few before-and-after pairs as a single continuous direction, then applies it
+      <i>zero-shot to any image</i> with granular control over edit intensity.
+    </div>
+  </div>
+</section>
+
+<!-- ============= ABSTRACT ============= -->
+<section class="section narrow" id="abstract">
+  <span class="section-eyebrow ink">Abstract</span>
+  <h2 class="section-title">When a picture says what words can't.</h2>
+  <p class="section-subtitle">A short framing of the problem and our fix; full details in the paper.</p>
+
+  <div class="abstract-card reveal">
+    <p>
+      The rapid advancement of diffusion models has enabled the generation of high-fidelity images from textual prompts,
+      yet achieving precise, disentangled control over specific attributes remains a significant challenge. A fundamental
+      limitation arises because visual differences between images are often far more descriptive and nuanced than what can
+      be captured through human-crafted text descriptions. To address this, we introduce <b>ViDiT (Visual Direction
+      Transfer for Diffusion)</b>, a framework that expands the editing vocabulary by capturing latent semantics directly
+      from image-edit pairs. ViDiT learns the underlying transformation by optimizing a single, global, and continuous
+      editing direction from a small set of "before-and-after" examples, transferring visual changes into the diffusion
+      model's conditioning space. Operating on a <b>"Learn Once"</b> principle, it eliminates the need for model fine-tuning
+      or expensive per-image optimization at inference. Once learned, these continuous directions enable
+      <b>"Edit Anywhere"</b> capabilities — highly disentangled manipulations of facial features, animal attributes, or
+      artistic styles applied to any image in a zero-shot manner with granular control over edit intensity. Quantitative
+      and qualitative evaluations demonstrate that ViDiT outperforms existing text-based editing methods in maintaining
+      input faithfulness while achieving precise, scalable attribute control.
+    </p>
+  </div>
+</section>
+
+<!-- ============= METHOD ============= -->
+<section class="section" id="method">
+  <span class="section-eyebrow blue">Method</span>
+  <h2 class="section-title">Transfer the visual delta into one continuous direction.</h2>
+  <p class="section-subtitle">
+    Given image-edit pairs from <i>any</i> source, ViDiT optimizes a single direction <b>d</b> in the diffusion model's
+    conditioning space — with the base model and encoder kept entirely frozen.
+  </p>
+
+  <div class="figure-card reveal">
+    <img src="./static/images/framework.png" alt="ViDiT framework: semantic alignment, edit-pair sampling, and latent alignment">
+    <p class="caption">
+      <b>Framework.</b> A <span style="color:var(--blue-700);font-weight:600">semantic alignment loss</span> uses a frozen
+      vision-language (CLIP) encoder to place <b>d</b> in the right conceptual neighborhood, while a
+      <span style="color:var(--cyan-700);font-weight:600">latent alignment loss</span> leverages the denoiser's dense,
+      spatially-aligned predictions to preserve fine-grained identity. Only <b>d</b> is updated.
+    </p>
+  </div>
+
+  <div class="method-grid">
+    <div class="method-step reveal">
+      <div class="num">1</div>
+      <h3>Collect image-edit pairs</h3>
+      <p>A small set of before-and-after pairs <i>(x, x′)</i> from any editing source — GANs, domain-adaptation models, or diffusion editors — encodes the precise visual delta, with no linguistic ambiguity.</p>
+    </div>
+    <div class="method-step reveal">
+      <div class="num">2</div>
+      <h3>Learn one direction</h3>
+      <p>A dual objective optimizes a single continuous direction <b>d</b>: semantic alignment locks in the right concept; latent alignment sharpens spatial precision. The model and encoder stay frozen.</p>
+    </div>
+    <div class="method-step reveal">
+      <div class="num">3</div>
+      <h3>Edit anywhere, zero-shot</h3>
+      <p>At inference, <b>d</b> is injected additively into classifier-free guidance with a scale λ<sub>e</sub> for continuous, bidirectional control — and multiple directions compose without retraining.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============= ALGORITHM ============= -->
+<section class="section narrow" id="algorithm">
+  <span class="section-eyebrow cyan">Algorithm</span>
+  <h2 class="section-title">The "Learn Once" procedure.</h2>
+  <p class="section-subtitle">
+    Learning a direction is a one-time optimization per concept. Only $\mathbf{d}$ is updated — the diffusion model
+    $\epsilon_\theta$ and the CLIP encoder $E_I$ stay completely frozen.
+  </p>
+
+  <div class="algo-card reveal">
+    <div class="algo-title">Learning direction $\mathbf{d}$ with ViDiT</div>
+    <div class="algo-require">
+      <b>Require:</b> frozen diffusion model $\epsilon_\theta(x_t, c)$, frozen CLIP image encoder $E_I(x)$,
+      $N$ image-edit pairs $\{(x_i, x_i')\}$ from <i>any</i> editing source, randomly initialized direction
+      $\mathbf{d}$, learning rate $\eta$.
+    </div>
+
+    <div class="algo-step">
+      <span class="num">1</span>
+      <span class="code algo-loop">while training do&nbsp;&nbsp; for each pair $(x_i, x_i')$ do</span>
+    </div>
+    <div class="algo-step">
+      <span class="num">2</span>
+      <span class="code">sample $\epsilon \sim \mathcal{N}(0, 1)$, &nbsp; $t \sim \mathcal{U}(1, T)$</span>
+      <span class="note">↳ a fresh noise sample and timestep each step</span>
+    </div>
+    <div class="algo-step">
+      <span class="num">3</span>
+      <span class="code">$x_{i,t} = x_i + \alpha^t \epsilon$, &nbsp; $x_{i,t}' = x_i' + \alpha^t \epsilon$</span>
+      <span class="note">↳ add the <b>same</b> noise to both images, so only the edit distinguishes them</span>
+    </div>
+    <div class="algo-step">
+      <span class="num">4</span>
+      <span class="code">$\mathcal{L}_\text{latent} = -\lVert \epsilon_\theta(x_{i,t}', \mathbf{d}) - \epsilon_\theta(x_{i,t}, \mathbf{d}) \rVert_2^2$</span>
+      <span class="note">↳ <b>latent alignment</b>: push edited vs. original apart in the denoiser's dense prediction space &rarr; preserves fine detail</span>
+    </div>
+    <div class="algo-step">
+      <span class="num">5</span>
+      <span class="code">$\mathcal{L}_\text{sem} = 1 - \text{cossim}(E_I(x_i'), \mathbf{d}) + \text{cossim}(E_I(x_i), \mathbf{d})$</span>
+      <span class="note">↳ <b>semantic alignment</b>: pull $\mathbf{d}$ toward the edited image, away from the original, in CLIP space &rarr; locks in the concept</span>
+    </div>
+    <div class="algo-step">
+      <span class="num">6</span>
+      <span class="code">$\mathbf{d} \leftarrow \mathbf{d} - \eta\, \nabla_{\mathbf{d}} (\mathcal{L}_\text{sem} + \mathcal{L}_\text{latent})$</span>
+      <span class="note">↳ update <b>only</b> $\mathbf{d}$; the base model and encoder remain frozen</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============= INTERPOLATION ============= -->
+<section class="section narrow" id="control">
+  <span class="section-eyebrow cyan">Continuous control</span>
+  <h2 class="section-title">A direction, not a switch.</h2>
+  <p class="section-subtitle">
+    Because the edit is a <i>continuous</i> direction $\mathbf{d}$, the scale $\lambda_e$ turns a single learned
+    concept into a smooth, bidirectional dial — from removing the attribute ($-\lambda_e$) to amplifying it
+    ($+\lambda_e$) — all from the same direction, on the same image.
+  </p>
+
+  <div class="figure-card reveal">
+    <img src="./static/images/interpolation.png" alt="Edit interpolation: Beard and Age attributes scaled from minus to plus on generated portraits">
+    <div class="scale-track" aria-hidden="true">
+      <span>−−&nbsp; stronger reverse</span>
+      <div class="scale-bar"></div>
+      <span>amplify&nbsp; ++</span>
+    </div>
+    <p class="caption">
+      <b>Edit interpolation on generated images.</b> Sweeping $\lambda_e$ for the <i>Beard</i> (top) and <i>Age</i>
+      (bottom) directions on Stable-Diffusion portraits. The identity and artistic style are preserved throughout —
+      only the targeted attribute moves along the direction.
+    </p>
+  </div>
+</section>
+
+<!-- ============= RESULTS ============= -->
+<section class="section" id="results">
+  <span class="section-eyebrow blue">Results</span>
+  <h2 class="section-title">Directions transferred with ViDiT.</h2>
+  <p class="section-subtitle">
+    Fine-grained directions drawn from diverse supervision sources, transferred zero-shot to in-the-wild images.
+  </p>
+
+  <div class="figure-card reveal">
+    <img src="./static/images/main_results.png" alt="ViDiT directions across faces, animals, artistic styles, and real portraits">
+    <p class="caption">
+      <b>(a)</b> Facial attributes (<i>Bald</i>, <i>Gender</i>, <i>White Hair</i>) from StyleGAN2/FFHQ ·
+      <b>(b)</b> Animal attributes (<i>Lynx</i>, <i>Lion</i>, <i>Skin Color</i>) from StyleGAN2/AFHQ ·
+      <b>(c)</b> Artistic styles (<i>Ukiyoe</i>, <i>Pixar</i>) from StyleGAN-NADA ·
+      <b>(d)</b> Semantic edits (<i>Gender</i>, <i>Beard</i>) from Prompt2Prompt. Across all cases, edits stay
+      disentangled and preserve identity, background, and style.
+    </p>
+  </div>
+</section>
+
+<!-- ============= GALLERY ============= -->
+<section class="section" id="gallery">
+  <span class="section-eyebrow cyan">Gallery</span>
+  <h2 class="section-title">Edit anywhere.</h2>
+  <p class="section-subtitle">
+    The same learned directions transfer across wildly different image distributions — synthetic generations,
+    classical paintings, and real in-the-wild photographs — while preserving identity, background, and style.
+  </p>
+
+  <div class="tabs" role="tablist">
+    <button class="active" data-tab="gal-gen">Generated Images</button>
+    <button data-tab="gal-art">Artistic Paintings</button>
+    <button data-tab="gal-real">Real Images</button>
+  </div>
+
+  <div class="tab-panel active" id="gal-gen">
+    <div class="panel reveal">
+      <img src="./static/images/gallery_generated.png" alt="Editing results on Stable Diffusion generated images">
+      <p class="panel-caption"><b>Generated Images.</b> ViDiT applies the desired semantic <i>without inversion</i>, while preserving the stylization of the generated image.</p>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="gal-art">
+    <div class="panel reveal">
+      <img src="./static/images/gallery_art.png" alt="Editing results on artistic paintings">
+      <p class="panel-caption"><b>Artistic Paintings.</b> Edits are applied without altering the overall artistic style of the image (e.g. an oil-painting look is retained).</p>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="gal-real">
+    <div class="panel reveal">
+      <img src="./static/images/gallery_real.png" alt="Editing results on real in-the-wild photographs">
+      <p class="panel-caption"><b>Real Images.</b> ViDiT generalizes beyond face-centered crops to diverse scenes and subjects, preserving identity and background.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============= FOOTER ============= -->
+<footer class="footer" id="bibtex">
+  <div class="brand">ViDiT</div>
+  <p>Learn Once, Edit Anywhere: Visual Direction Transfer for Diffusion Models · ECCV 2026</p>
+  <div class="cite">@inproceedings{dalva2026vidit,
+    title={Learn Once, Edit Anywhere: Visual Direction Transfer for Diffusion Models},
+    author={Dalva, Yusuf and Yesiltepe, Hidir and Yanardag, Pinar},
+    booktitle={Proceedings of the European Conference on Computer Vision (ECCV)},
+    year={2026}
+}</div>
+  <div class="foot-links">
+    <a href="https://yusufdalva.github.io/" target="_blank" rel="noopener">Yusuf Dalva</a>
+    <a href="https://yesiltepe-hidir.github.io/" target="_blank" rel="noopener">Hidir Yesiltepe</a>
+    <a href="https://pinguar.org/" target="_blank" rel="noopener">Pinar Yanardag</a>
+  </div>
+  <p class="small">© Yusuf Dalva, Hidir Yesiltepe &amp; Pinar Yanardag · Virginia Tech · Page design adapted from the <a href="https://github.com/nerfies/nerfies.github.io" style="color:rgba(255,255,255,0.55)">Nerfies</a> template.</p>
+</footer>
+
+<script>
+  /* ---------- Tabs ---------- */
+  document.querySelectorAll('.tabs').forEach(group => {
+    group.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.tab;
+        const section = group.closest('.section');
+        section.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+        section.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const target = section.querySelector('#' + id);
+        if (target) target.classList.add('active');
+      });
+    });
+  });
+
+  /* ---------- Reveal-on-scroll (content stays visible if JS/observer absent) ---------- */
+  if ('IntersectionObserver' in window) {
+    document.querySelectorAll('.reveal').forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (r.top > window.innerHeight) el.classList.add('js-hidden');
+    });
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.remove('js-hidden');
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
         }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  }
+</script>
 
-        gtag('js', new Date());
-
-        gtag('config', 'G-PYVRSFMDRL');
-        </script>
-
-    <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
-
-    <link rel="stylesheet" href="./static/css/bulma.min.css">
-    <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
-    <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
-    <link rel="stylesheet" href="./static/css/font-awesome.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
-    <link rel="stylesheet" href="./static/css/index.css">
-
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <script defer src="./static/js/fontawesome.all.min.js"></script>
-    <script src="./static/js/bulma-carousel.min.js"></script>
-    <script src="./static/js/bulma-slider.min.js"></script>
-    <script src="./static/js/index.js"></script>
-    </head>
-
-    <body>
-
-      <section class="hero">
-        <div class="hero-body">
-          <div class="container is-max-desktop">
-            <div class="columns is-centered">
-              <div class="column has-text-centered">
-                <h1 class="title is-1 publication-title">GANTASTIC: <u>GAN</u>-based <u>T</u>r<u>a</u>n<u>s</u>fer of <u>I</u>nterpretable Dire<u>c</u>tions for Disentangled Image Editing in Text-to-Image Diffusion Models</h1>
-                <div class="is-size-5 publication-authors">
-                  <span class="author-block">
-                    <a href="https://yusufdalva.github.io/">Yusuf Dalva</a>,</span>
-                    <span class="author-block">
-                        <a href="https://sites.google.com/view/hidir-yesiltepe/">Hidir Yesiltepe</a>,</span>
-                  <span class="author-block">
-                    <a href="https://pinguar.org/">Pinar Yanardag</a>
-                  </span>
-                </div>
-      
-                <div class="is-size-5 publication-authors">
-                  <span class="author-block">Virginia Tech</span>
-                </div>
-      
-                <div class="column has-text-centered">
-                  <div class="publication-links">
-                    <!-- PDF Link. -->
-                    <span class="link-block">
-                      <a href="https://arxiv.org/abs/2403.19645"
-                         class="external-link button is-normal is-rounded is-dark">
-                        <span class="icon">
-                            <i class="fas fa-file-pdf"></i>
-                        </span>
-                        <span>Paper</span>
-                      </a>
-                    </span>
-                    <!-- Code Link. -->
-                    <span class="link-block">
-                      <a
-                         class="external-link button is-normal is-rounded is-dark">
-                        <span class="icon">
-                            <i class="fab fa-github"></i>
-                        </span>
-                        <span>Code (Coming soon)</span>
-                        </a>
-                    </span>
-                    <!-- Dataset Link. -->
-                    <!-- <span class="link-block">
-                      <a href="https://github.com/google/nerfies/releases/tag/0.1"
-                         class="external-link button is-normal is-rounded is-dark">
-                        <span class="icon">
-                            <i class="far fa-images"></i>
-                        </span>
-                        <span>Data</span>
-                        </a> -->
-                  </div>
-      
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="hero teaser">
-        <div class="container is-max-desktop">
-          <div class="hero-body">
-            <h4 class="subtitle">
-                <b>TL;DR</b> We propose a framework that transfers editing directions from pre-trained GANs (e.g. StyleGAN) to diffusion models (e.g. Stable Diffusion) without any finetuning on either of these models.  
-                <!--
-                <span class="dnerf">NoiseCLR</span> discovers semantic directions in latent diffusion models in a completely unsupervised manner. 
-                With this work, we present latent directions discovered in domains such as Art, Fashion, Face, Cats and Cars in Stable Diffusion. -->
-            </h4>
-            <div class="container">
-                <img src="./static/images/teaser.png" />
-                <br/>
-                <p>
-                <b>GANTASTIC</b> is a novel framework that transfers interpretable directions  from pre-trained GAN models directly into diffusion-based models to enable disentangled and controllable image editing.</i>
-                </p>
-            </div>
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="container is-max-desktop">
-          <!-- Abstract. -->
-          <div class="columns is-centered has-text-centered">
-            <div class="column is-four-fifths">
-              <h2 class="title is-3">Abstract</h2>
-              <div class="content has-text-justified">
-                <p>
-                    The rapid advancement in image generation models has predominantly been driven by diffusion models, which have demonstrated unparalleled success in generating high-fidelity, diverse images from textual prompts. 
-                    Despite their success, diffusion models encounter substantial challenges in the domain of image editing, particularly in executing disentangled edits—changes that target specific attributes of an image while leaving 
-                    irrelevant parts untouched. In contrast, Generative Adversarial Networks (GANs) have been recognized for their success in disentangled edits through their interpretable latent spaces. We introduce  <b>GANTASTIC</b>, 
-                    a novel framework that   takes existing directions from pre-trained GAN models—representative of specific, controllable attributes—and transfers these directions into diffusion-based models. This novel approach not only 
-                    maintains the generative quality and diversity that diffusion models are known for but also significantly enhances their capability to perform precise, targeted image edits, thereby leveraging the best of both worlds.
-                </p>
-              </div>
-            </div>
-          </div>
-          <!--/ Abstract. -->
-      
-        
-        <!-- Method -->
-        <section class="section">
-          <div class="container is-max-desktop">
-            <div class="columns is-centered has-text-centered">
-              <div class="column is-12">
-                <h2 class="title is-3">Method</h2>
-      
-                <div class="content has-text-justified">
-                  <!--
-                  <p>
-                   Explain method
-                  </p>
-                -->
-                  <div class="container">
-                    <img src="./static/images/framework.png" />
-                    <br />
-                  </div>
-      
-                  <p>
-                    After generating a set of <i>N</i> images using StyleGAN, denoted as <i>G(s)</i>, and their edited versions, denoted as <i>G(s + &Delta;s)</i>, our framework learns a latent direction $d$ that reflects 
-                    the edits introduced by <i>&Delta;s</i> (e.g. beard) to the pre-trained diffusion model. To effectively learn such a latent direction, we utilize both the denoising network used by the diffusion model, and the CLIP Image Encoder.  
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-          <section class="section">
-            <div class="container is-max-desktop">
-                <h1 class="title is-3 has-text-centered">Directions Transferred by GANTASTIC</h1>
-                <div class="columns is-centered has-text-centered">
-                    <div class="column is-12">
-            
-                      <div class="content">
-                        <div class="container">
-                          <img class="center" src="./static/images/main_figure.png"/>
-                          <br />
-                        </div>
-            
-                        <p>
-                            <b>GANTASTIC</b> successfully transfers editing directions that modify the overall look, including changes in <i>race</i> or <i>aging</i>, as well as more 
-                            detailed edits that target specific facial attributes, such as <i>eyeglasses</i> or a <i>beard</i>. <b>GANTASTIC</b> can also distinguish among various edits 
-                            for the same feature underlines the versatility of our approach, providing users with an extensive selection of editing options for individual characteristics, like multiple 
-                            smile designs or styles of baldness.
-                        </p>
-            </div>
-            </section>
-
-            <section class="section">
-                <div class="container is-max-desktop">
-                    <h1 class="title is-3 has-text-centered">Capabilities of GANTASTIC</h1>
-                    <div class="columns is-centered has-text-centered">
-                        <div class="column is-12">
-                
-                          <div class="content">
-                            <div class="container">
-                              <img class="center" src="./static/images/capabilities.png"/>
-                              <br />
-                            </div>
-                
-                            <p>
-                                The proposed framework can successfully learn latent directions from a variety of domains including human faces and dog images. Additioanlly, <b>GANTASTIC</b> enables users to adjust 
-                                the intensity of the editing effect through a scaling parameter. This functionality gives users the flexibility to either tone down or intensify the impact of a given editing direction. 
-                                For instance, in the case of the <i>gender</i> edit, users can lessen the effect for a more <i>masculine</i> appearance or enhance it for a more <i>feminine</i> look by applying 
-                                a negative or positive scale, respectively.
-                            </p>
-                </div>
-    
-            </section>
-
-            <section class="section">
-                <div class="container is-max-desktop">
-                    <h1 class="title is-3 has-text-centered">Comparisons with StyleGAN edits</h1>
-                    <div class="columns is-centered has-text-centered">
-                        <div class="column is-12">
-                
-                          <div class="content">
-                            <div class="container">
-                              <img class="center" src="./static/images/gan_to_diffusion.png"/>
-                              <br />
-                            </div>
-                
-                            <p>
-                                We demonstrate the beard, gender, race and baldness edits above, along with reference images from the training datasets constructed using StyleGAN. Above, we show the images generated 
-                                by StyleGAN as <i>G(s)</i> and their edited counter-parts as <i>G(s + &Delta;s)</i>, respectively. As our qualitative results also show, edits learned by <b>GANTASTIC</b> successfully 
-                                translates the disentangled directions performed on StyleGAN to Stable Diffusion.
-                            </p>
-                </div>
-            </section>
-
-            <section class="section">
-                <div class="container is-max-desktop">
-                    <h1 class="title is-3 has-text-centered">Editing Complex Scenes</h1>
-                    <div class="columns is-centered has-text-centered">
-                        <div class="column is-12">
-                
-                          <div class="content">
-                            <div class="container">
-                              <img class="center" src="./static/images/additional_results_arxiv.png"/>
-                              <br />
-                            </div>
-                
-                            <p>
-                                We demonstrate edits performed by <b>GANTASTIC</b> framework on full-body images (Row 1), and images with multiple faces (Row 2). Additionally, for the example with multiple faces (Row 2), 
-                                editing the gender attribute amplifies the feminine traits in both of the faces.
-                            </p>
-                </div>
-            </section>
-
-          <section class="section" id="BibTeX">
-            <div class="container is-max-desktop content">
-              <h2 class="title">BibTeX</h2>
-              <pre><code>
-@misc{dalva2024gantastic,
-  title={GANTASTIC: GAN-based Transfer of Interpretable Directions for Disentangled Image Editing in Text-to-Image Diffusion Models}, 
-  author={Yusuf Dalva and Hidir Yesiltepe and Pinar Yanardag},
-  year={2024},
-  eprint={2403.19645},
-  archivePrefix={arXiv},
-  primaryClass={cs.CV}
-} 
-              </code></pre>
-            </div>
-          </section>
-          
-          <footer class="footer">
-            <div class="container">
-              <div class="content has-text-centered is-centered">
-                <a class="icon-link" href="https://github.com/yusufdalva" class="external-link" disabled>
-                  <i class="fab fa-github"></i>
-                </a>
-              </div>
-              <div class="columns">
-                <div class="column is-8">
-                  <div class="content has-text-justified">
-                    <!-- <p>
-                      This website is licensed under a <a rel="license"
-                                                          href="http://creativecommons.org/licenses/by-sa/4.0/">Creative
-                      Commons Attribution-ShareAlike 4.0 International License</a>.
-                    </p> -->
-                    <p>This page is adapted from <a
-                        href="https://github.com/nerfies/nerfies.github.io">this</a> implementation.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </footer>
-    </body>
+</body>
 </html>
