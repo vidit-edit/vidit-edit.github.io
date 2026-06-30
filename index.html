@@ -219,18 +219,36 @@
   /* ---------- Section base ---------- */
   .section { max-width: 1200px; margin: 0 auto; padding: 96px 24px 40px; position: relative; }
   .section.narrow { max-width: 880px; }
-  .section-eyebrow {
-    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.18em;
-    text-transform: uppercase; padding: 5px 12px; border-radius: 999px; margin-bottom: 16px;
+  /* Editorial "vector" section header: mono index/label + directional rule */
+  .sec-head {
+    --acc: var(--blue-500); --acc-text: var(--blue-700);
+    display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
   }
-  .section-eyebrow.blue { background: var(--blue-50); color: var(--blue-700); }
-  .section-eyebrow.cyan   { background: var(--cyan-50);   color: var(--cyan-700); }
-  .section-eyebrow.ink    { background: var(--ink-100);   color: var(--ink-700); }
+  .sec-head.cyan { --acc: var(--cyan-500); --acc-text: var(--cyan-700); }
+  .sec-head.ink  { --acc: var(--ink-300);  --acc-text: var(--ink-500); }
+  .sec-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500;
+    letter-spacing: 0.06em; color: var(--acc-text);
+  }
+  .sec-name {
+    font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-900); white-space: nowrap;
+  }
+  .sec-vector { flex: 1; position: relative; height: 10px; min-width: 40px; }
+  .sec-vector::before {
+    content: ""; position: absolute; left: 0; right: 9px; top: 50%; transform: translateY(-50%);
+    height: 2px; border-radius: 2px; background: var(--acc); opacity: 0.28;
+  }
+  .sec-vector::after {
+    content: ""; position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+    width: 0; height: 0; border-left: 9px solid var(--acc);
+    border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+  }
   .section-title {
-    font-family: 'DM Serif Display', serif; font-size: clamp(1.9rem, 3.2vw, 2.6rem);
-    line-height: 1.1; letter-spacing: -0.015em; margin-bottom: 14px;
+    font-family: 'DM Serif Display', serif; font-size: clamp(1.4rem, 2.3vw, 1.9rem);
+    line-height: 1.18; letter-spacing: -0.01em; margin-bottom: 12px; color: var(--ink-900);
   }
-  .section-subtitle { font-size: 16px; color: var(--ink-500); max-width: 780px; margin-bottom: 40px; }
+  .section-subtitle { font-size: 16px; color: var(--ink-500); max-width: 780px; margin-bottom: 38px; }
 
   /* ---------- TL;DR ---------- */
   .tldr { margin-top: -80px; position: relative; z-index: 2; max-width: 1080px; margin-left: auto; margin-right: auto; padding: 0 24px; }
@@ -484,9 +502,7 @@
 
 <!-- ============= ABSTRACT ============= -->
 <section class="section narrow" id="abstract">
-  <span class="section-eyebrow ink">Abstract</span>
-  <h2 class="section-title">When a picture says what words can't.</h2>
-  <p class="section-subtitle">A short framing of the problem and our fix; full details in the paper.</p>
+  <div class="sec-head ink"><span class="sec-num">01</span><span class="sec-name">Abstract</span><span class="sec-vector"></span></div>
 
   <div class="abstract-card reveal">
     <p>
@@ -509,8 +525,7 @@
 
 <!-- ============= METHOD ============= -->
 <section class="section" id="method">
-  <span class="section-eyebrow blue">Method</span>
-  <h2 class="section-title">Transfer the visual delta into one continuous direction.</h2>
+  <div class="sec-head"><span class="sec-num">02</span><span class="sec-name">Method</span><span class="sec-vector"></span></div>
   <p class="section-subtitle">
     Given image-edit pairs from <i>any</i> source, ViDiT optimizes a single direction <b>d</b> in the diffusion model's
     conditioning space — with the base model and encoder kept entirely frozen.
@@ -547,8 +562,7 @@
 
 <!-- ============= ALGORITHM ============= -->
 <section class="section narrow" id="algorithm">
-  <span class="section-eyebrow cyan">Algorithm</span>
-  <h2 class="section-title">The "Learn Once" procedure.</h2>
+  <div class="sec-head cyan"><span class="sec-num">03</span><span class="sec-name">Algorithm</span><span class="sec-vector"></span></div>
   <p class="section-subtitle">
     Learning a direction is a one-time optimization per concept. Only $\mathbf{d}$ is updated — the diffusion model
     $\epsilon_\theta$ and the CLIP encoder $E_I$ stay completely frozen.
@@ -596,8 +610,7 @@
 
 <!-- ============= INTERPOLATION ============= -->
 <section class="section narrow" id="control">
-  <span class="section-eyebrow cyan">Continuous control</span>
-  <h2 class="section-title">A direction, not a switch.</h2>
+  <div class="sec-head"><span class="sec-num">04</span><span class="sec-name">Continuous control</span><span class="sec-vector"></span></div>
   <p class="section-subtitle">
     Because the edit is a <i>continuous</i> direction $\mathbf{d}$, the scale $\lambda_e$ turns a single learned
     concept into a smooth, bidirectional dial — from removing the attribute ($-\lambda_e$) to amplifying it
@@ -621,8 +634,7 @@
 
 <!-- ============= RESULTS ============= -->
 <section class="section" id="results">
-  <span class="section-eyebrow blue">Results</span>
-  <h2 class="section-title">Directions transferred with ViDiT.</h2>
+  <div class="sec-head cyan"><span class="sec-num">05</span><span class="sec-name">Results</span><span class="sec-vector"></span></div>
   <p class="section-subtitle">
     Fine-grained directions drawn from diverse supervision sources, transferred zero-shot to in-the-wild images.
   </p>
@@ -641,8 +653,7 @@
 
 <!-- ============= GALLERY ============= -->
 <section class="section" id="gallery">
-  <span class="section-eyebrow cyan">Gallery</span>
-  <h2 class="section-title">Edit anywhere.</h2>
+  <div class="sec-head"><span class="sec-num">06</span><span class="sec-name">Gallery</span><span class="sec-vector"></span></div>
   <p class="section-subtitle">
     The same learned directions transfer across wildly different image distributions — synthetic generations,
     classical paintings, and real in-the-wild photographs — while preserving identity, background, and style.
